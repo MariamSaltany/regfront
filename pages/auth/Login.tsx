@@ -20,22 +20,35 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
     setError('');
 
     try {
-      // 1. Call the login service (this now saves the token to localStorage)
+      // 1️⃣ Call login API (token is stored in localStorage inside authService)
       const loginRes = await authApi.login({ email, password });
 
-      // 2. Update the global user state with user data from login response
-      setUser(loginRes.data.user);
+      const user: User | undefined = loginRes.data?.user;
 
-      // 3. Redirect based on role
-      if (loginRes.data.user.role === 'super_admin') {
+      // 2️⃣ Safety check (prevents crashes if backend response changes)
+      if (!user) {
+        throw new Error('Login succeeded but user data was not returned.');
+      }
+
+      // 3️⃣ Store user in global state
+      setUser(user);
+
+      // 4️⃣ Redirect based on role
+      if (user.role === 'super_admin') {
         navigate('/admin/reviews/moderation');
-      } else if (loginRes.data.user.role === 'school_admin') {
+      } else if (user.role === 'school_admin') {
         navigate('/school-admin/profile');
       } else {
         navigate('/schools');
       }
+
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      setError(
+        err.response?.data?.message ||
+        err.response?.data?.errors?.email?.[0] ||
+        err.response?.data?.errors?.password?.[0] ||
+        'Invalid email or password'
+      );
     } finally {
       setLoading(false);
     }
@@ -43,7 +56,9 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
 
   return (
     <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-lg shadow-md">
-      <h1 className="text-2xl font-bold text-secondary mb-6 text-center">Login to Madrasati</h1>
+      <h1 className="text-2xl font-bold text-secondary mb-6 text-center">
+        Login to Madrasati
+      </h1>
 
       {error && (
         <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm border border-red-200">
@@ -53,23 +68,31 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-textDark mb-1">Email</label>
+          <label className="block text-sm font-medium text-textDark mb-1">
+            Email
+          </label>
           <input
-            type="email" required
+            type="email"
+            required
             className="w-full border p-2 rounded focus:ring-2 focus:ring-primary outline-none"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
+
         <div>
-          <label className="block text-sm font-medium text-textDark mb-1">Password</label>
+          <label className="block text-sm font-medium text-textDark mb-1">
+            Password
+          </label>
           <input
-            type="password" required
+            type="password"
+            required
             className="w-full border p-2 rounded focus:ring-2 focus:ring-primary outline-none"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
+
         <button
           disabled={loading}
           className="w-full bg-primary text-secondary font-bold py-3 rounded-lg hover:bg-yellow-500 transition disabled:opacity-50"
@@ -79,7 +102,13 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
       </form>
 
       <div className="mt-6 text-center text-sm text-textLight">
-        Don't have an account? <Link to="/register" className="text-secondary font-semibold hover:underline">Register here</Link>
+        Don't have an account?{' '}
+        <Link
+          to="/register"
+          className="text-secondary font-semibold hover:underline"
+        >
+          Register here
+        </Link>
       </div>
     </div>
   );
