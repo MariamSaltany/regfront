@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from './LanguageContext';
-import { UserRole, User } from '../types';
+import { UserRole, User } from '../services/types';
 import { authApi } from '../services/authService';
 
 interface NavbarProps {
@@ -28,9 +27,18 @@ const Navbar: React.FC<NavbarProps> = ({ user, setUser }) => {
     if (!user) {
       return (
         <>
-          <Link to="/schools" className="hover:text-primary transition">{t('schools')}</Link>
-          <Link to="/login" className="hover:text-primary transition">{t('login')}</Link>
-          <Link to="/register" className="bg-primary text-secondary px-4 py-2 rounded-md font-bold hover:bg-yellow-500 transition">{t('register')}</Link>
+          <Link to="/schools" className="hover:text-primary transition">
+            {t('schools')}
+          </Link>
+          <Link to="/login" className="hover:text-primary transition">
+            {t('login')}
+          </Link>
+          <Link
+            to="/register"
+            className="bg-primary text-secondary px-4 py-2 rounded-md font-bold hover:bg-yellow-500 transition"
+          >
+            {t('register')}
+          </Link>
         </>
       );
     }
@@ -38,8 +46,12 @@ const Navbar: React.FC<NavbarProps> = ({ user, setUser }) => {
     if (user.role === UserRole.PARENT) {
       return (
         <>
-          <Link to="/schools" className="hover:text-primary transition">{t('schools')}</Link>
-          <Link to="/my-reviews" className="hover:text-primary transition">{t('my_reviews')}</Link>
+          <Link to="/schools" className="hover:text-primary transition">
+            {t('schools')}
+          </Link>
+          <Link to="/my-reviews" className="hover:text-primary transition">
+            {t('my_reviews')}
+          </Link>
         </>
       );
     }
@@ -47,8 +59,12 @@ const Navbar: React.FC<NavbarProps> = ({ user, setUser }) => {
     if (user.role === UserRole.SCHOOL_ADMIN) {
       return (
         <>
-          <Link to="/school-admin/profile" className="hover:text-primary transition">{t('profile')}</Link>
-          <Link to="/school-admin/reviews" className="hover:text-primary transition">{t('verification')}</Link>
+          <Link to="/school-admin/profile" className="hover:text-primary transition">
+            {t('profile')}
+          </Link>
+          <Link to="/school-admin/reviews" className="hover:text-primary transition">
+            {t('verification')}
+          </Link>
         </>
       );
     }
@@ -56,12 +72,19 @@ const Navbar: React.FC<NavbarProps> = ({ user, setUser }) => {
     if (user.role === UserRole.SUPER_ADMIN) {
       return (
         <>
-          <Link to="/admin/reviews/moderation" className="hover:text-primary transition">{t('moderation')}</Link>
-          <Link to="/admin/reports" className="hover:text-primary transition">{t('reports')}</Link>
-          <Link to="/admin/schools" className="hover:text-primary transition">{t('schools')}</Link>
+          <Link to="/admin/reviews/moderation" className="hover:text-primary transition">
+            {t('moderation')}
+          </Link>
+          <Link to="/admin/reports" className="hover:text-primary transition">
+            {t('reports')}
+          </Link>
+          <Link to="/admin/schools" className="hover:text-primary transition">
+            {t('schools')}
+          </Link>
         </>
       );
     }
+
     return null;
   };
 
@@ -77,15 +100,17 @@ const Navbar: React.FC<NavbarProps> = ({ user, setUser }) => {
               <NavLinks />
             </div>
           </div>
+
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
               className="text-sm border border-white/20 px-3 py-1 rounded hover:bg-white/10"
             >
               {lang === 'en' ? 'العربية' : 'English'}
             </button>
+
             {user && (
-              <button 
+              <button
                 onClick={handleLogout}
                 className="text-sm font-medium hover:text-primary"
               >
