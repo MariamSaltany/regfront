@@ -41,7 +41,11 @@ export type School = {
   logo?: string;
   logo_path?: string | null;
 
-  // ✅ admin relation returned by backend
+  // For school profile response
+  details?: School;
+  gallery?: { id: number; url: string; thumb: string; name: string }[];
+
+  // admin relation returned by backend
   admin?: SchoolAdminMini | null;
 };
 
@@ -60,6 +64,8 @@ export type ReviewBase = {
 
   status?: string;
   created_at: string;
+
+  user?: { id: number; name: string };
 };
 
 export type PublicReview = ReviewBase & {

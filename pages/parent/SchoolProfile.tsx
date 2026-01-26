@@ -104,13 +104,13 @@ const SchoolProfile: React.FC<{ user: User | null }> = ({ user }) => {
             </h3>
             <ul className="space-y-3 text-sm">
               {[
-                ['Category', school.category],
-                ['President', school.president_name],
-                ['Fees Range', school.fees_range],
-                ['Area', school.area],
-                ['Level', school.level],
-                ['Gender', school.gender_type],
-                ['Curriculum', school.curriculum],
+                ['Category', school.details?.category],
+                ['President', school.details?.president_name],
+                ['Fees Range', school.details?.fees_range],
+                ['Area', school.details?.area],
+                ['Level', school.details?.level],
+                ['Gender', school.details?.gender_type],
+                ['Curriculum', school.details?.curriculum],
               ].map(([label, value]) => (
                 <li key={label} className="flex justify-between">
                   <span className="text-textLight font-medium">{label}</span>
@@ -136,7 +136,7 @@ const SchoolProfile: React.FC<{ user: User | null }> = ({ user }) => {
             )}
           </div>
 
-          <p className="text-textLight mb-6">{school.address}</p>
+          <p className="text-textLight mb-6">{school.details?.address}</p>
 
           {/* REVIEWS */}
           <h2 className="text-xl font-bold text-textDark mb-6">
@@ -164,7 +164,7 @@ const SchoolProfile: React.FC<{ user: User | null }> = ({ user }) => {
                     <div className="flex justify-between mb-3">
                       <div>
                         <p className="font-bold text-textDark">
-                          {review.parent_name || 'Verified Parent'}
+                          {review.user?.name || 'Verified Parent'}
                         </p>
                         <p className="text-xs text-textLight">
                           {new Date(review.created_at).toLocaleDateString()}
@@ -203,6 +203,26 @@ const SchoolProfile: React.FC<{ user: User | null }> = ({ user }) => {
               </div>
             )}
           </div>
+
+          {/* PHOTO GALLERY */}
+          {school.gallery && school.gallery.length > 0 && (
+            <div className="mt-10">
+              <h2 className="text-xl font-bold text-textDark mb-6">
+                School Gallery
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {school.gallery.map((photo: any) => (
+                  <div key={photo.id} className="aspect-square bg-neutral-100 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition group">
+                    <img
+                      src={photo.url}
+                      alt="School photo"
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
