@@ -18,10 +18,11 @@ type FormState = {
   curriculum: string;
 
   logo: File | null;
-  photos: FileList | null;
+  photos: File[]; // Changed to File[] array
 
   currentLogo?: string;
   currentPhotos: { id: number; url: string; name: string }[];
+  deletedPhotoIds: number[]; // Added to track deletions
 
   // admin assignment
   existing_admin_id: string; 
@@ -45,9 +46,10 @@ const emptyForm: FormState = {
   curriculum: "",
 
   logo: null,
-  photos: null,
+  photos: [], // Initialize as empty array
   currentLogo: undefined,
   currentPhotos: [],
+  deletedPhotoIds: [],
 
   existing_admin_id: "",
   create_new_admin: false,
@@ -101,7 +103,6 @@ const AdminSchools: React.FC = () => {
   };
 
   const openEdit = (s: School) => {
-    // We use the slug because your model uses getRouteKeyName() = 'slug'
     const identifier = s.slug || s.id;
     api.get(`/admin/schools/${identifier}`).then(res => {
       const school = res.data.school;
@@ -134,7 +135,7 @@ const AdminSchools: React.FC = () => {
       });
       setModalOpen(true);
     }).catch(e => {
-      alert("Failed to load school details: " + (e.response?.data?.message || e.message));
+      alert("Failed to load school details");
       fetchSchools();
     });
   };
@@ -148,9 +149,7 @@ const AdminSchools: React.FC = () => {
   const handleDelete = async (s: School) => {
     const ok = confirm(`Delete school "${s.name}"?`);
     if (!ok) return;
-
     try {
-      // Use slug for deletion
       await api.delete(`/admin/schools/${s.slug || s.id}`);
       setSchools((prev) => prev.filter((x) => x.id !== s.id));
       alert("School deleted.");
@@ -169,42 +168,36 @@ const AdminSchools: React.FC = () => {
       formData.append('level', form.level);
       formData.append('gender_type', form.gender_type);
       
-      if (form.email) formData.append('email', form.email);
-      if (form.phone) formData.append('phone', form.phone);
-      if (form.address) formData.append('address', form.address);
-      if (form.president_name) formData.append('president_name', form.president_name);
-      if (form.fees_range) formData.append('fees_range', form.fees_range);
-      if (form.curriculum) formData.append('curriculum', form.curriculum);
+      formData.append('email', form.email || "");
+      formData.append('phone', form.phone || "");
+      formData.append('address', form.address || "");
+      formData.append('president_name', form.president_name || "");
+      formData.append('fees_range', form.fees_range || "");
+      formData.append('curriculum', form.curriculum || "");
 
       if (form.logo) formData.append('logo', form.logo);
-      if (form.photos) {
-        Array.from(form.photos).forEach((file) => {
-          formData.append('photos[]', file);
-        });
-      }
+
+      // Append new photos
+      form.photos.forEach((file) => {
+        formData.append('photos[]', file);
+      });
+
+      // Append IDs of photos to be deleted from server
+      form.deletedPhotoIds.forEach(id => {
+        formData.append('delete_photos[]', String(id));
+      });
 
       if (isEdit && form.slug) {
-
-        const res = await api.post(`/admin/schools/${form.slug}?_method=PATCH`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        const updated: School = res.data?.school;
-        setSchools((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+        await api.post(`/admin/schools/${form.slug}?_method=PATCH`, formData);
       } else {
-        const res = await api.post(`/admin/schools`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        const created: School = res.data?.school;
-        setSchools((prev) => [created, ...prev]);
+        await api.post(`/admin/schools`, formData);
       }
 
       alert("School saved.");
-      await fetchAdmins();
       await fetchSchools();
       closeModal();
     } catch (e: any) {
-      const msg = e.response?.data?.message || "Save failed";
-      alert(msg);
+      alert(e.response?.data?.message || "Save failed");
     } finally {
       setSaving(false);
     }
@@ -212,7 +205,6 @@ const AdminSchools: React.FC = () => {
 
   const assignAdmin = async () => {
     if (!form.slug) return;
-
     setSaving(true);
     try {
       let payload: any = {};
@@ -223,23 +215,16 @@ const AdminSchools: React.FC = () => {
           new_admin_password: form.new_admin_password,
         };
       } else if (form.existing_admin_id) {
-        payload = {
-          existing_admin_id: Number(form.existing_admin_id),
-        };
+        payload = { existing_admin_id: Number(form.existing_admin_id) };
       } else {
         alert("Select an existing admin OR create a new one.");
         setSaving(false);
         return;
       }
-
       const res = await api.post(`/admin/schools/${form.slug}/assign-admin`, payload);
-
-      const updated: School = res.data?.school;
-      setSchools((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-
       alert("Admin assigned.");
-      await fetchAdmins();
       await fetchSchools();
+      await fetchAdmins();
     } catch (e: any) {
       alert(e.response?.data?.message || "Assign failed");
     } finally {
@@ -255,9 +240,6 @@ const AdminSchools: React.FC = () => {
           onClick={openCreate}
           className="bg-primary text-secondary px-6 py-2 rounded-lg font-bold hover:bg-yellow-500 shadow-sm transition flex items-center gap-2"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-          </svg>
           Add New School
         </button>
       </div>
@@ -275,40 +257,26 @@ const AdminSchools: React.FC = () => {
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
-
             <tbody className="divide-y divide-neutral-100 text-sm">
               {schools.map((s) => (
                 <tr key={s.id} className="hover:bg-neutral-50 transition">
                   <td className="px-6 py-4 font-bold text-secondary">{s.name}</td>
-                  <td className="px-6 py-4 text-textLight">
-                    {s.area || "-"} • {s.level || "-"}
-                  </td>
+                  <td className="px-6 py-4 text-textLight">{s.area || "-"} • {s.level || "-"}</td>
                   <td className="px-6 py-4">
-                    {s.admin ? (
+                    {/* Fixed: Conditional check ensures we don't crash if backend sends a string or null */}
+                    {s.admin && typeof s.admin === 'object' ? (
                       <div>
                         <p className="font-semibold text-textDark">{s.admin.name}</p>
                         <p className="text-xs text-textLight">{s.admin.email}</p>
                       </div>
                     ) : (
-                      <span className="bg-orange-100 text-orange-600 px-2 py-1 rounded text-[10px] font-bold">
-                        No Admin
-                      </span>
+                      <span className="bg-orange-100 text-orange-600 px-2 py-1 rounded text-[10px] font-bold">No Admin</span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => openEdit(s)}
-                        className="text-secondary hover:text-secondary/80 font-bold"
-                      >
-                        Edit / Assign
-                      </button>
-                      <button
-                        onClick={() => handleDelete(s)}
-                        className="text-red-500 hover:text-red-700 font-bold"
-                      >
-                        Delete
-                      </button>
+                      <button onClick={() => openEdit(s)} className="text-secondary font-bold">Edit / Assign</button>
+                      <button onClick={() => handleDelete(s)} className="text-red-500 font-bold">Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -318,65 +286,40 @@ const AdminSchools: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100]">
           <div className="bg-white w-full max-w-2xl p-8 rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold text-secondary mb-6">
-              {isEdit ? "Edit School" : "Create School"}
-            </h2>
+            <h2 className="text-2xl font-bold text-secondary mb-6">{isEdit ? "Edit School" : "Create School"}</h2>
 
             <div className="space-y-4 mb-8">
-              {/* Form inputs exactly as you had them, using setForm ... */}
               <div>
                 <label className="block text-xs font-bold text-textLight uppercase mb-1">School Name *</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                   className="w-full border p-2 rounded focus:ring-2 focus:ring-primary outline-none"
-                  required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-textLight uppercase mb-1">Area *</label>
-                  <input
-                    value={form.area}
-                    onChange={(e) => setForm((p) => ({ ...p, area: e.target.value }))}
-                    className="w-full border p-2 rounded outline-none"
-                    required
-                  />
+                  <input value={form.area} onChange={(e) => setForm((p) => ({ ...p, area: e.target.value }))} className="w-full border p-2 rounded outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-textLight uppercase mb-1">Level *</label>
-                  <input
-                    value={form.level}
-                    onChange={(e) => setForm((p) => ({ ...p, level: e.target.value }))}
-                    className="w-full border p-2 rounded outline-none"
-                    required
-                  />
+                  <input value={form.level} onChange={(e) => setForm((p) => ({ ...p, level: e.target.value }))} className="w-full border p-2 rounded outline-none" />
                 </div>
               </div>
 
-              {/* ... Other input fields continue here ... */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-textLight uppercase mb-1">Category *</label>
-                  <input
-                    value={form.category}
-                    onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-                    className="w-full border p-2 rounded outline-none"
-                    required
-                  />
+                  <input value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} className="w-full border p-2 rounded outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-textLight uppercase mb-1">Gender Type *</label>
-                  <select
-                    value={form.gender_type}
-                    onChange={(e) => setForm((p) => ({ ...p, gender_type: e.target.value as any }))}
-                    className="w-full border p-2 rounded outline-none bg-white"
-                  >
+                  <select value={form.gender_type} onChange={(e) => setForm((p) => ({ ...p, gender_type: e.target.value as any }))} className="w-full border p-2 rounded outline-none bg-white">
                     <option value="mixed">mixed</option>
                     <option value="boys">boys</option>
                     <option value="girls">girls</option>
@@ -386,71 +329,78 @@ const AdminSchools: React.FC = () => {
 
               {/* FILE UPLOADERS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6">
-                {/* Logo Section */}
                 <div>
                     <label className="block text-xs font-bold text-textLight uppercase mb-2">School Logo</label>
-                    <div className="relative group border-2 border-dashed border-neutral-200 rounded-xl p-4 transition hover:border-primary flex flex-col items-center justify-center min-h-[160px] bg-neutral-50">
+                    <div className="relative group border-2 border-dashed border-neutral-200 rounded-xl p-4 flex flex-col items-center justify-center min-h-[160px] bg-neutral-50">
                         {(form.logo || form.currentLogo) ? (
                             <div className="relative w-24 h-24">
-                                <img 
-                                    src={form.logo ? URL.createObjectURL(form.logo) : form.currentLogo} 
-                                    className="w-full h-full object-contain" 
-                                    alt="Preview" 
-                                />
-                                <button type="button" onClick={() => setForm(p => ({...p, logo: null}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
+                                <img src={form.logo ? URL.createObjectURL(form.logo) : form.currentLogo} className="w-full h-full object-contain" alt="Preview" />
+                                <button type="button" onClick={() => setForm(p => ({...p, logo: null}))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow">✕</button>
                             </div>
                         ) : <span className="text-xs text-textLight">Click to upload</span>}
                         <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setForm(p => ({...p, logo: e.target.files?.[0] || null}))} />
                     </div>
                 </div>
 
-                {/* Gallery Section */}
                 <div>
                     <label className="block text-xs font-bold text-textLight uppercase mb-2">Gallery</label>
                     <div className="border-2 border-dashed border-neutral-200 rounded-xl p-4 bg-neutral-50 min-h-[160px]">
                         <div className="flex flex-wrap gap-2">
+                            {/* Existing Photos */}
                             {form.currentPhotos.map(p => (
-                                <img key={p.id} src={p.url} className="w-12 h-12 object-cover rounded border" alt="Gallery" />
+                                <div key={p.id} className="relative w-12 h-12">
+                                    <img src={p.url} className="w-full h-full object-cover rounded border" alt="Gallery" />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setForm(prev => ({
+                                            ...prev,
+                                            currentPhotos: prev.currentPhotos.filter(img => img.id !== p.id),
+                                            deletedPhotoIds: [...prev.deletedPhotoIds, p.id]
+                                        }))}
+                                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px]"
+                                    >✕</button>
+                                </div>
                             ))}
-                            {form.photos && Array.from(form.photos).map((f, i) => (
-                                <img key={i} src={URL.createObjectURL(f)} className="w-12 h-12 object-cover rounded border border-primary" alt="New" />
+                            {/* Staged New Photos */}
+                            {form.photos.map((f, i) => (
+                                <div key={i} className="relative w-12 h-12">
+                                    <img src={URL.createObjectURL(f)} className="w-full h-full object-cover rounded border border-primary" alt="New" />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setForm(prev => ({
+                                            ...prev,
+                                            photos: prev.photos.filter((_, idx) => idx !== i)
+                                        }))}
+                                        className="absolute -top-1 -right-1 bg-gray-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px]"
+                                    >✕</button>
+                                </div>
                             ))}
-                            <label className="w-12 h-12 flex items-center justify-center border-2 border-dashed border-neutral-300 rounded cursor-pointer hover:border-primary">
+                            <label className="w-12 h-12 flex items-center justify-center border-2 border-dashed border-neutral-300 rounded cursor-pointer hover:border-primary bg-white">
                                 <span className="text-xl">+</span>
-                                <input type="file" multiple hidden onChange={(e) => setForm(p => ({...p, photos: e.target.files}))} />
+                                <input type="file" multiple hidden accept="image/*" onChange={(e) => {
+                                    if(e.target.files) {
+                                        const newFiles = Array.from(e.target.files);
+                                        setForm(p => ({...p, photos: [...p.photos, ...newFiles]}));
+                                    }
+                                    e.target.value = "";
+                                }} />
                             </label>
                         </div>
                     </div>
                 </div>
               </div>
 
-              {/* ADMIN ASSIGNMENT SECTION */}
               {isEdit && (
                 <div className="bg-neutral-50 p-4 rounded-lg border mt-4">
                   <label className="block text-xs font-bold text-secondary uppercase mb-2">Assign School Admin</label>
                   <div className="flex items-center gap-3 mb-3">
-                    <input
-                      type="checkbox"
-                      checked={form.create_new_admin}
-                      onChange={(e) => setForm((p) => ({ ...p, create_new_admin: e.target.checked, existing_admin_id: "" }))}
-                    />
+                    <input type="checkbox" checked={form.create_new_admin} onChange={(e) => setForm((p) => ({ ...p, create_new_admin: e.target.checked, existing_admin_id: "" }))} />
                     <span className="text-sm">Create a new admin account</span>
                   </div>
-
                   {!form.create_new_admin ? (
-                    <select
-                      value={form.existing_admin_id}
-                      onChange={(e) => setForm((p) => ({ ...p, existing_admin_id: e.target.value }))}
-                      className="w-full border p-2 rounded bg-white"
-                    >
+                    <select value={form.existing_admin_id} onChange={(e) => setForm((p) => ({ ...p, existing_admin_id: e.target.value }))} className="w-full border p-2 rounded bg-white">
                       <option value="">Select existing admin...</option>
-                      {admins.map((a) => (
-                        <option key={a.id} value={String(a.id)}>
-                          {a.name} ({a.email}){a.adminSchool ? ` — assigned to ${a.adminSchool.name}` : ""}
-                        </option>
-                      ))}
+                      {admins.map((a) => <option key={a.id} value={String(a.id)}>{a.name} ({a.email})</option>)}
                     </select>
                   ) : (
                     <div className="space-y-3">
@@ -460,15 +410,15 @@ const AdminSchools: React.FC = () => {
                     </div>
                   )}
                   <button onClick={assignAdmin} disabled={saving} className="mt-3 px-4 py-2 bg-secondary text-white rounded font-bold w-full disabled:opacity-50">
-                    {saving ? "Processing..." : "Assign Admin"}
+                    {saving ? "Processing..." : "Update Admin Assignment"}
                   </button>
                 </div>
               )}
             </div>
 
             <div className="flex gap-4 justify-end">
-              <button type="button" onClick={closeModal} className="px-6 py-2 text-textLight hover:bg-neutral-100 rounded-lg">Cancel</button>
-              <button disabled={saving} type="button" onClick={saveSchool} className="px-8 py-2 bg-primary text-secondary font-bold rounded-lg hover:bg-yellow-500 shadow transition disabled:opacity-60">
+              <button type="button" onClick={closeModal} className="px-6 py-2 text-textLight">Cancel</button>
+              <button disabled={saving} onClick={saveSchool} className="px-8 py-2 bg-primary text-secondary font-bold rounded-lg shadow disabled:opacity-60">
                 {saving ? "Saving..." : "Save School Data"}
               </button>
             </div>
