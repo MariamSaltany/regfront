@@ -17,7 +17,7 @@ export type SchoolAdminMini = {
   name: string;
   email: string;
   role?: string;
-  adminSchool?: { id: number; name: string } | null; // from backend schoolAdmins endpoint
+  adminSchool?: { id: number; name: string } | null;
 };
 
 export type School = {
@@ -28,6 +28,8 @@ export type School = {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+
+  description?: string | null; 
 
   area?: string | null;
   category?: string | null;
@@ -41,11 +43,9 @@ export type School = {
   logo?: string;
   logo_path?: string | null;
 
-  // For school profile response
   details?: School;
   gallery?: { id: number; url: string; thumb: string; name: string }[];
 
-  // admin relation returned by backend
   admin?: SchoolAdminMini | null;
 };
 
@@ -76,9 +76,19 @@ export type Review = ReviewBase & {
   student_number: string;
 };
 
+export type SchoolAdminPublishedReview = ReviewBase & {
+  is_reported?: boolean;
+  report_status?: string | null;
+
+  hygiene?: number | null;
+  management?: number | null;
+  education_quality?: number | null;
+  parent_communication?: number | null;
+};
+
 export type SchoolPhoto = {
   id: number;
-  file_path: string;
+  file_path?: string;
   url: string;
   caption?: string | null;
   created_at?: string;

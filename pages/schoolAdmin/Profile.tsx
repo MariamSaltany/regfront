@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import api from "../../services/api";
-import { School, Review, SchoolPhoto } from "../../services/types";
+import { School, SchoolAdminPublishedReview, SchoolPhoto } from "../../services/types";
 
 const SchoolAdminProfile: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"info" | "photos" | "reviews">("info");
 
   const [school, setSchool] = useState<School | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<SchoolAdminPublishedReview[]>([]);
   const [photos, setPhotos] = useState<SchoolPhoto[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -15,22 +15,19 @@ const SchoolAdminProfile: React.FC = () => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
 
-  // ✅ SAFE extractors (handle both shapes)
   const extractSchool = (data: any): School | null => {
     const s = data?.school ?? data;
     return s && typeof s === "object" ? (s as School) : null;
   };
 
   const extractPhotos = (data: any): SchoolPhoto[] => {
-    // backend may return {photos: []} OR [] directly
     const list = data?.photos ?? data;
     return Array.isArray(list) ? (list as SchoolPhoto[]) : [];
   };
 
-  const extractReviews = (data: any): Review[] => {
-    // backend may return {reviews: []} OR [] directly
+  const extractReviews = (data: any): SchoolAdminPublishedReview[] => {
     const list = data?.reviews ?? data;
-    return Array.isArray(list) ? (list as Review[]) : [];
+    return Array.isArray(list) ? (list as SchoolAdminPublishedReview[]) : [];
   };
 
   const fetchAll = async () => {
@@ -39,7 +36,6 @@ const SchoolAdminProfile: React.FC = () => {
       const [sRes, pRes, rRes] = await Promise.all([
         api.get("/school-admin/profile"),
         api.get("/school-admin/photos"),
-        // ✅ Published reviews endpoint
         api.get("/school-admin/published-reviews"),
       ]);
 
@@ -51,7 +47,6 @@ const SchoolAdminProfile: React.FC = () => {
       setReviews(extractReviews(rRes.data));
     } catch (err: any) {
       console.error("SchoolAdminProfile crash:", err);
-      // ✅ Don’t white-screen. Show an empty state.
       setSchool(null);
       setPhotos([]);
       setReviews([]);
@@ -64,7 +59,6 @@ const SchoolAdminProfile: React.FC = () => {
     fetchAll();
   }, []);
 
-  // ✅ handleSaveInfo (POST + _method=PATCH, do not force Content-Type)
   const handleSaveInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!school) return;
@@ -72,15 +66,14 @@ const SchoolAdminProfile: React.FC = () => {
     setSaving(true);
     try {
       const form = new FormData();
-
-      // ✅ method spoofing (best practice for multipart updates)
       form.append("_method", "PATCH");
 
-      // ✅ include ALL fields you allow editing
       form.append("name", school.name ?? "");
       form.append("email", school.email ?? "");
       form.append("phone", school.phone ?? "");
       form.append("address", school.address ?? "");
+      form.append("description", (school as any).description ?? ""); // ✅ NEW
+
       form.append("area", school.area ?? "");
       form.append("category", school.category ?? "");
       form.append("level", school.level ?? "");
@@ -93,7 +86,6 @@ const SchoolAdminProfile: React.FC = () => {
         form.append("logo", logoFile);
       }
 
-      // ✅ IMPORTANT: don't force Content-Type for FormData (axios sets boundary)
       const res = await api.post("/school-admin/profile", form);
 
       const updated = extractSchool(res.data);
@@ -121,6 +113,7 @@ const SchoolAdminProfile: React.FC = () => {
     if (!files.length) return;
 
     setUploadFiles(files);
+
     const formData = new FormData();
     files.forEach((file) => formData.append("photos[]", file));
 
@@ -144,14 +137,33 @@ const SchoolAdminProfile: React.FC = () => {
     if (!reason?.trim()) return;
 
     try {
-      // ✅ CORRECT: school admin endpoint
       await api.post(`/school-admin/reviews/${reviewId}/report`, { report_reason: reason });
-
       alert("Report sent to Super Admin");
     } catch (e: any) {
       alert(e.response?.data?.message || "Report failed");
     }
   };
+
+  const getLogoSrc = (s: any) => {
+    if (typeof s?.logo === "string" && s.logo.trim() !== "") return s.logo;
+
+    const lp = s?.logo_path;
+    if (typeof lp === "string" && lp.trim() !== "") {
+      const clean = lp.replace(/^\/+/, "");
+      return `http://127.0.0.1:8000/storage/${clean}`;
+    }
+
+    return "";
+  };
+
+  const logoPreview = logoFile ? URL.createObjectURL(logoFile) : "";
+
+  const RatingChip = ({ label, value }: { label: string; value: any }) => (
+    <div className="flex items-center justify-between gap-2 bg-white border rounded px-3 py-2 text-xs">
+      <span className="text-textLight">{label}</span>
+      <span className="font-bold text-secondary">{value ?? "-"}/5</span>
+    </div>
+  );
 
   if (loading) {
     return <div className="text-center py-20">Loading your school admin console...</div>;
@@ -160,13 +172,8 @@ const SchoolAdminProfile: React.FC = () => {
   if (!school) {
     return (
       <div className="max-w-4xl mx-auto py-20 text-center">
-        <p className="text-textLight">
-          School data could not be loaded. Open Console (F12) to see the error.
-        </p>
-        <button
-          onClick={fetchAll}
-          className="mt-4 px-4 py-2 border rounded font-semibold hover:bg-neutral-50"
-        >
+        <p className="text-textLight">School data could not be loaded. Open Console (F12) to see the error.</p>
+        <button onClick={fetchAll} className="mt-4 px-4 py-2 border rounded font-semibold hover:bg-neutral-50">
           Retry
         </button>
       </div>
@@ -201,21 +208,17 @@ const SchoolAdminProfile: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-8 min-h-[500px]">
-        {/* INFO */}
         {activeTab === "info" && (
           <form onSubmit={handleSaveInfo} className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="col-span-full mb-4">
               <label className="block text-sm font-bold text-textDark mb-2">School Logo</label>
+
               <div className="flex items-center gap-6">
                 <div className="w-24 h-24 bg-neutral-100 rounded border flex items-center justify-center overflow-hidden">
-                  {school.logo ? (
-                    <img src={school.logo} alt="Logo" className="object-contain w-full h-full" />
-                  ) : (school as any).logo_path ? (
-                    <img
-                      src={`http://127.0.0.1:8000/storage/${(school as any).logo_path}`}
-                      alt="Logo"
-                      className="object-contain w-full h-full"
-                    />
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Logo Preview" className="object-contain w-full h-full" />
+                  ) : getLogoSrc(school as any) ? (
+                    <img src={getLogoSrc(school as any)} alt="Logo" className="object-contain w-full h-full" />
                   ) : (
                     <span className="text-xs text-textLight">No Logo</span>
                   )}
@@ -254,6 +257,18 @@ const SchoolAdminProfile: React.FC = () => {
               </div>
             ))}
 
+            {/* ✅ NEW: Description section (optional) */}
+            <div className="col-span-full">
+              <label className="block text-sm font-bold text-textDark mb-1">School Description (Optional)</label>
+              <textarea
+                className="w-full border p-3 rounded focus:ring-2 focus:ring-primary outline-none text-sm min-h-[140px]"
+                placeholder="Write a short description about the school (mission, environment, values, activities, etc.)"
+                value={(school as any).description || ""}
+                onChange={(e) => setSchool({ ...school, description: e.target.value } as any)}
+              />
+              <p className="text-xs text-textLight mt-1">Max 5000 characters.</p>
+            </div>
+
             <div className="col-span-full pt-4 flex justify-end">
               <button
                 disabled={saving}
@@ -265,7 +280,6 @@ const SchoolAdminProfile: React.FC = () => {
           </form>
         )}
 
-        {/* PHOTOS */}
         {activeTab === "photos" && (
           <div>
             <div className="flex justify-between items-center mb-6">
@@ -293,7 +307,7 @@ const SchoolAdminProfile: React.FC = () => {
                   key={p.id}
                   className="relative group overflow-hidden rounded-lg shadow-sm border h-40 bg-neutral-100"
                 >
-                  <img src={p.url} className="w-full h-full object-cover" alt="School" />
+                  <img src={(p as any).url} className="w-full h-full object-cover" alt="School" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
                     <button
                       type="button"
@@ -308,21 +322,18 @@ const SchoolAdminProfile: React.FC = () => {
               ))}
 
               {photos.length === 0 && (
-                <div className="col-span-full text-center py-10 text-textLight italic">
-                  No photos uploaded yet.
-                </div>
+                <div className="col-span-full text-center py-10 text-textLight italic">No photos uploaded yet.</div>
               )}
             </div>
           </div>
         )}
 
-        {/* PUBLISHED REVIEWS */}
         {activeTab === "reviews" && (
           <div className="space-y-6">
             <h3 className="font-bold text-secondary mb-4">Published Reviews</h3>
 
             {reviews.length > 0 ? (
-              reviews.map((r: any) => (
+              reviews.map((r) => (
                 <div key={r.id} className="bg-neutral-50 p-6 rounded-lg border">
                   <p className="text-xs text-textLight">
                     {r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}
@@ -332,10 +343,17 @@ const SchoolAdminProfile: React.FC = () => {
                     Overall rating: {r.overall_rating ?? "-"} / 5
                   </p>
 
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <RatingChip label="Hygiene" value={r.hygiene} />
+                    <RatingChip label="Management" value={r.management} />
+                    <RatingChip label="Education Quality" value={r.education_quality} />
+                    <RatingChip label="Parent Communication" value={r.parent_communication} />
+                  </div>
+
                   {r.comment ? (
-                    <p className="text-sm italic mt-3">"{r.comment}"</p>
+                    <p className="text-sm italic mt-4">"{r.comment}"</p>
                   ) : (
-                    <p className="text-sm text-textLight italic mt-3">No comment.</p>
+                    <p className="text-sm text-textLight italic mt-4">No comment.</p>
                   )}
 
                   <button
